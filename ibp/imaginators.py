@@ -71,7 +71,7 @@ class Imaginator_CState(torch.nn.Module):
             action_dim: int,
             hidden_dim: int
     ) -> None:
-        super(Imaginator_DState, self).__init__()
+        super(Imaginator_CState, self).__init__()
         
         self.state_min = torch.tensor(state_min, dtype=torch.float32)
         self.state_max = torch.tensor(state_max, dtype=torch.float32)
