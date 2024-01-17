@@ -1,3 +1,4 @@
+import collections
 import torch
 import torch.distributions
 import torch.nn
@@ -54,3 +55,24 @@ class Manager(torch.nn.Module):
         states_histories = torch.cat([states, histories], dim=1)
         values = self.value_fn_predictor(states_histories)
         return values
+    
+    def loss_fn(
+            self,
+            gamma: float,
+            log_probs: torch.Tensor,
+            states: torch.Tensor,
+            histories: torch.Tensor,
+            rewards: torch.Tensor
+    ) -> torch.Tensor:
+        Gs = collections.deque(maxlen=len(rewards))
+        G = torch.tensor(0., dtype=torch.float32)
+        for t in reversed(range(len(rewards))):
+            G = G + gamma * rewards[t]
+            Gs.appendleft(G)
+        returns = torch.tensor(Gs, dtype=torch.float32)
+        values = self.get_values(states, histories).view(-1)
+        with torch.no_grad():
+            advantages = returns - values
+        reinforce_loss = (-log_probs * advantages).mean()
+        value_loss = torch.nn.functional.smooth_l1_loss(values, returns)
+        return reinforce_loss + value_loss

@@ -45,6 +45,21 @@ class Imaginator_DState(torch.nn.Module):
             actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return self(states, actions)
+    
+    def loss_fn(
+            self,
+            imagined_states_logits: torch.Tensor,
+            real_states: torch.Tensor,
+            imagined_rewards: torch.Tensor,
+            real_rewards: torch.Tensor
+    ) -> torch.Tensor:
+        state_loss = torch.nn.functional.cross_entropy(
+            imagined_states_logits, real_states
+        )
+        reward_loss = torch.nn.functional.smooth_l1_loss(
+            imagined_rewards, real_rewards
+        )
+        return state_loss + reward_loss
 
 class Imaginator_CState(torch.nn.Module):
     def __init__(
@@ -93,3 +108,18 @@ class Imaginator_CState(torch.nn.Module):
             actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         return self(states, actions)
+    
+    def loss_fn(
+            self,
+            imagined_states: torch.Tensor,
+            real_states: torch.Tensor,
+            imagined_rewards: torch.Tensor,
+            real_rewards: torch.Tensor
+    ) -> torch.Tensor:
+        state_loss = torch.nn.functional.smooth_l1_loss(
+            imagined_states, real_states
+        )
+        reward_loss = torch.nn.functional.smooth_l1_loss(
+            imagined_rewards, real_rewards
+        )
+        return state_loss + reward_loss
