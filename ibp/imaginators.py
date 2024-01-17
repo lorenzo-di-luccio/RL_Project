@@ -1,7 +1,7 @@
 import torch
 import torch.nn
 import torch.nn.functional
-from typing import Tuple
+from typing import List, Tuple
 
 class Imaginator_DState(torch.nn.Module):
     def __init__(
@@ -12,6 +12,7 @@ class Imaginator_DState(torch.nn.Module):
             hidden_dim: int
     ) -> None:
         super(Imaginator_DState, self).__init__()
+
         self.next_state_predictor = torch.nn.Sequential(
             torch.nn.Linear(state_dim + action_dim, hidden_dim),
             torch.nn.ReLU(),
@@ -49,12 +50,13 @@ class Imaginator_CState(torch.nn.Module):
     def __init__(
             self,
             state_dim: int,
-            state_min: list[float],
-            state_max: list[float],
+            state_min: List[float],
+            state_max: List[float],
             action_dim: int,
             hidden_dim: int
     ) -> None:
         super(Imaginator_DState, self).__init__()
+        
         self.state_min = torch.tensor(state_min, dtype=torch.float32)
         self.state_max = torch.tensor(state_max, dtype=torch.float32)
         self.next_state_predictor = torch.nn.Sequential(
