@@ -327,7 +327,7 @@ class IBPAgent():
                 t_manager_rewards
             )
             manager_loss.backward()
-            self.manager_optimizer.zero_grad()
+            self.manager_optimizer.step()
 
             self.imaginator_optimizer.zero_grad()
             imaginator_loss = self.imaginator.loss_fn(
@@ -335,8 +335,8 @@ class IBPAgent():
                 t_imaginator_imagined_rewards, t_imaginator_real_rewards
             )
             imaginator_loss.backward()
-
             self.imaginator_optimizer.step()
+
             self.controller_memory_optimizer.zero_grad()
             controller_memory_loss = self.controller.loss_fn(
                 gamma,
@@ -344,6 +344,8 @@ class IBPAgent():
                 t_controller_memory_states, t_controller_memory_histories,
                 t_controller_memory_rewards
             )
+            controller_memory_loss.backward()
+            self.controller_memory_optimizer.step()
 
             print(
                 f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real Steps={num_real_steps:4d} Imagined Steps={num_steps - num_real_steps:4d} "
