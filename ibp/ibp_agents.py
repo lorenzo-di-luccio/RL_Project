@@ -1,5 +1,6 @@
 import gymnasium
 import itertools
+import numpy
 import torch
 import torch.nn
 import torch.optim
@@ -84,10 +85,31 @@ class IBPAgent():
         self.imaginator.requires_grad_(requires_grad=True)
         self.memory.requires_grad_(requires_grad=True)
     
+    def set_lr(
+            self,
+            optimizer: torch.optim.Optimizer,
+            lr: float
+    ) -> None:
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+    
+    def manager_step(
+            self,
+            last_real_state: numpy.ndarray,
+            t_history: torch.Tensor
+    ) -> Tuple[int, torch.Tensor, torch.Tensor]:
+        t_last_real_state = torch.from_numpy(last_real_state)\
+            .to(dtype=torch.float32).unsqueeze(0)
+        routes_prob_dist = self.manager.decide(t_last_real_state, t_history)
+        t_route = routes_prob_dist.sample()
+        t_route_log_prob = routes_prob_dist.log_prob(t_route)
+        move = t_route.item()
+        return move, t_route.unsqueeze(0), t_route_log_prob
+    
     def train(self, args: Dict[str, Any]) -> None:
         self.unfreeze()
         self.train_mode()
-        '''
+
         num_episodes = args["max_num_episodes"]
 
         manager_log_probs = list()
@@ -107,6 +129,7 @@ class IBPAgent():
 
         for episode in range(1, num_episodes + 1):
             state, _ = self.train_env.reset()
+            state = numpy.atleast_1d(state)
             done = False
             score = 0.
             t_history = self.memory.reset()
@@ -132,11 +155,9 @@ class IBPAgent():
             controller_memory_rewards.clear()
 
             while not done:
-                t_last_real_state = torch.from_numpy(last_real_state).to(dtype=torch.float32).unsqueeze(0)
-                routes_prob_dist = self.manager.decide(t_last_real_state, t_history.detach())
-                t_route = routes_prob_dist.sample().unsqueeze(0)
-                t_route_log_prob = routes_prob_dist.log_prob(t_route)
-                move = t_route.item()
+                move, t_route, t_route_log_prob = self.manager_step(
+                    last_real_state, t_history.detach()
+                )
 
                 if move == 0 or num_imagined_steps >= imagination_budget:
                     t_last_real_state = torch.from_numpy(last_real_state).to(dtype=torch.float32).unsqueeze(0)
@@ -275,4 +296,3 @@ class IBPAgent():
                 f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real Steps={num_real_steps:4d} Imagined Steps={num_steps - num_real_steps:4d} "
                 f"M-Loss={manager_loss.item():4.4f} I-Loss={imaginator_loss.item():4.4f} CM-Loss={controller_memory_loss.item():4.4f} "
                 f"Mean Score={cum_score / episode:4.4f} Score={score:4.4f} {'<==' if score > 0. else '   '}")
-            '''
