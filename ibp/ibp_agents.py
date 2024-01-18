@@ -4,7 +4,7 @@ import numpy
 import torch
 import torch.nn
 import torch.optim
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 from .manager import Manager
 from .controllers import Controller_DAction
 from .imaginators import Imaginator_DState, Imaginator_CState
@@ -127,8 +127,8 @@ class IBPAgent():
             ]:
         next_real_state, reward, terminated, truncated, _ = self.train_env.step(action)
         done = terminated or truncated
-        score += reward
-        next_real_state = numpy.atleast_1d(next_real_state)
+        score += float(reward)
+        next_real_state: numpy.ndarray = numpy.atleast_1d(next_real_state)
         reward = numpy.atleast_1d(reward)
         t_next_imagined_state, t_imagined_reward = self.imaginator.step(
             t_last_real_state, t_action
@@ -137,12 +137,21 @@ class IBPAgent():
             to(dtype=torch.float32).unsqueeze(0)
         t_reward = torch.from_numpy(reward).\
             to(dtype=torch.float32).unsqueeze(0)
-        score += reward
-        done = terminated or truncated
 
         return t_next_real_state, t_next_imagined_state,\
             t_reward, t_imagined_reward,\
             next_real_state, done, score
+    
+    def imagination_step(
+            self,
+            t_action: torch.Tensor,
+            t_last_state: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        t_next_imagined_state, t_imagined_reward = self.imaginator.step(
+            t_last_state, t_action
+        )
+
+        return t_next_imagined_state, t_imagined_reward
     
     def train(self, args: Dict[str, Any]) -> None:
         self.unfreeze()
@@ -206,10 +215,11 @@ class IBPAgent():
                     action, t_action, t_action_log_prob = self.controller_step(
                         t_last_real_state, t_history
                     )
+
                     t_next_real_state, t_next_imagined_state,\
                     t_reward, t_imagined_reward,\
                     next_real_state, done, score = self.act_step(
-                        action, t_last_real_state, t_action, t_route, score
+                        action, t_last_real_state, t_action, score
                     )
 
                     num_real_steps += 1
@@ -241,7 +251,11 @@ class IBPAgent():
                         t_last_real_state, t_history
                     )
 
-                    t_next_imagined_state, t_imagined_reward = self.imaginator.step(t_last_real_state, t_action)
+                    with torch.no_grad():
+                        t_next_imagined_state, t_imagined_reward = self.imagination_step(
+                            t_action, t_last_real_state
+                        )
+                    
                     num_imagined_steps += 1
                     memory_data = [
                         t_route,
@@ -250,7 +264,7 @@ class IBPAgent():
                         t_next_imagined_state,
                         t_imagined_reward
                     ]
-                    last_imagined_state = t_next_imagined_state.detach().squeeze(0).numpy()
+                    last_imagined_state = t_next_imagined_state.squeeze(0).numpy()
 
                     manager_log_probs.append(t_route_log_prob)
                     manager_states.append(t_last_real_state.squeeze(0))
@@ -259,13 +273,17 @@ class IBPAgent():
                     controller_memory_log_probs.append(t_action_log_prob)
                     controller_memory_states.append(t_last_real_state.squeeze(0))
                     controller_memory_histories.append(t_history.squeeze(0))
-                    controller_memory_rewards.append(t_imagined_reward.detach().squeeze(0))
+                    controller_memory_rewards.append(t_imagined_reward.squeeze(0))
                 elif move == 2:
                     action, t_action, t_action_log_prob = self.controller_step(
                         t_last_imagined_state, t_history
                     )
 
-                    t_next_imagined_state, t_imagined_reward = self.imaginator.step(t_last_imagined_state, t_action)
+                    with torch.no_grad():
+                        t_next_imagined_state, t_imagined_reward = self.imagination_step(
+                            t_action, t_last_imagined_state
+                        )
+                    
                     num_imagined_steps += 1
                     memory_data = [
                         t_route,
@@ -274,16 +292,16 @@ class IBPAgent():
                         t_next_imagined_state,
                         t_imagined_reward
                     ]
-                    last_imagined_state = t_next_imagined_state.detach().squeeze(0).numpy()
+                    last_imagined_state = t_next_imagined_state.squeeze(0).numpy()
 
                     manager_log_probs.append(t_route_log_prob)
                     manager_states.append(t_last_imagined_state.detach().squeeze(0))
                     manager_histories.append(t_history.detach().squeeze(0))
                     manager_rewards.append(t_imagined_reward.detach().squeeze(0))
                     controller_memory_log_probs.append(t_action_log_prob)
-                    controller_memory_states.append(t_last_imagined_state.detach().squeeze(0))
+                    controller_memory_states.append(t_last_imagined_state.squeeze(0))
                     controller_memory_histories.append(t_history.squeeze(0))
-                    controller_memory_rewards.append(t_imagined_reward.detach().squeeze(0))
+                    controller_memory_rewards.append(t_imagined_reward.squeeze(0))
                 t_history = self.memory.update(*memory_data)
                 num_steps += 1
             cum_score += score
