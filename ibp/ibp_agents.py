@@ -104,7 +104,7 @@ class IBPAgent():
         move = t_route.item()
         return move, torch.atleast_2d(t_route), t_route_log_prob
     
-    def controller_step(
+    def train_controller_step(
             self,
             t_state: torch.Tensor,
             t_history: torch.Tensor
@@ -115,16 +115,26 @@ class IBPAgent():
         action = t_action.item()
         return action, torch.atleast_2d(t_action), t_action_log_prob
     
-    def act_step(
+    def eval_controller_step(
+            self,
+            t_state: torch.Tensor,
+            t_history: torch.Tensor
+    ) -> Tuple[int, torch.Tensor]:
+        actions_prob_dist = self.controller.act(t_state, t_history)
+        t_action = actions_prob_dist.mode
+        action = t_action.item()
+        return action, torch.atleast_2d(t_action)
+    
+    def train_act_step(
             self,
             action: int,
             t_last_real_state: torch.Tensor,
             t_action: torch.Tensor,
             score: float
-            ) -> Tuple[
-                torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
-                numpy.ndarray, bool, float
-            ]:
+    ) -> Tuple[
+            torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+            numpy.ndarray, bool, float
+        ]:
         next_real_state, reward, terminated, truncated, _ = self.train_env.step(action)
         done = terminated or truncated
         score += float(reward)
@@ -142,6 +152,25 @@ class IBPAgent():
             t_reward, t_imagined_reward,\
             next_real_state, done, score
     
+    def eval_act_step(
+            self,
+            action: int,
+            score: float
+    ) -> Tuple[torch.Tensor, torch.Tensor, numpy.ndarray, bool, float]:
+        next_real_state, reward, terminated, truncated, _ = self.eval_env.step(action)
+        done = terminated or truncated
+        score += float(reward)
+        next_real_state: numpy.ndarray = numpy.atleast_1d(next_real_state)
+        reward = numpy.atleast_1d(reward)
+        
+        t_next_real_state = torch.from_numpy(next_real_state).\
+            to(dtype=torch.float32).unsqueeze(0)
+        t_reward = torch.from_numpy(reward).\
+            to(dtype=torch.float32).unsqueeze(0)
+
+        return t_next_real_state, t_reward,\
+            next_real_state, done, score
+    
     def imagination_step(
             self,
             t_action: torch.Tensor,
@@ -153,24 +182,83 @@ class IBPAgent():
 
         return t_next_imagined_state, t_imagined_reward
     
+    def init_train_data(
+            self,
+            state_continuous: bool
+    ) -> Dict[str, List[torch.Tensor]]:
+        train_data = dict()
+        train_data["manager_log_probs"] = list()
+        train_data["manager_states"] = list()
+        train_data["manager_histories"] = list()
+        train_data["manager_reward"] = list()
+        train_data["imaginator_real_states"] = list()
+        train_data[
+            f"imaginator_imagined_states{'' if state_continuous else '_logits'}"
+        ] = list()
+        train_data["imaginator_real_rewards"] = list()
+        train_data["imaginator_imagined_rewards"] = list()
+        train_data["controller_memory_log_probs"] = list()
+        train_data["controller_memory_states"] = list()
+        train_data["controller_memory_histories"] = list()
+        train_data["controller_memory_rewards"] = list()
+        return train_data
+    
+    def clear_train_data(
+            self,
+            train_data: Dict[str, List[torch.Tensor]],
+            state_continuous: bool
+    ) -> None:
+        train_data["manager_log_probs"].clear()
+        train_data["manager_states"].clear()
+        train_data["manager_histories"].clear()
+        train_data["manager_reward"].clear()
+        train_data["imaginator_real_states"].clear()
+        train_data[
+            f"imaginator_imagined_states{'' if state_continuous else '_logits'}"
+        ].clear()
+        train_data["imaginator_real_rewards"].clear()
+        train_data["imaginator_imagined_rewards"].clear()
+        train_data["controller_memory_log_probs"].clear()
+        train_data["controller_memory_states"].clear()
+        train_data["controller_memory_histories"].clear()
+        train_data["controller_memory_rewards"].clear()
+    
+    def update_train_data_on_act(
+            self,
+            train_data: Dict[str, List[torch.Tensor]],
+            state_continuous: bool,
+            new_train_data: Dict[str, List[torch.Tensor]]
+    ) -> None:
+        train_data["manager_log_probs"].append(
+            new_train_data["t_route_log_prob"]
+        )
+        train_data["manager_states"].append(
+            new_train_data["t_last_real_state"]
+        )
+        train_data["manager_histories"].append(
+            new_train_data["t_history"]
+        )
+        train_data["manager_rewards"].append(
+            new_train_data["t_reward"]
+        )
+        ## CONTINUA DA QUI!!
+        train_data["imaginator_real_states"].append(t_next_real_state.squeeze(0))
+        train_data["imaginator_imagined_states"].append(t_next_imagined_state.squeeze(0))
+        train_data["imaginator_real_rewards"].append(t_reward.squeeze(0))
+        train_data["imaginator_imagined_rewards"].append(t_imagined_reward.squeeze(0))
+        train_data["controller_memory_log_probs"].append(t_action_log_prob)
+        train_data["controller_memory_states"].append(t_last_real_state.squeeze(0))
+        train_data["controller_memory_histories"].append(t_history.squeeze(0))
+        train_data["controller_memory_rewards"].append(t_reward.squeeze(0))
+    
     def train(self, args: Dict[str, Any]) -> None:
         self.unfreeze()
         self.train_mode()
 
         num_episodes = args["max_num_episodes"]
+        state_continuous = args["state_continuous"]
 
-        manager_log_probs = list()
-        manager_states = list()
-        manager_histories = list()
-        manager_rewards = list()
-        imaginator_real_states = list()
-        imaginator_imagined_states = list()
-        imaginator_real_rewards = list()
-        imaginator_imagined_rewards = list()
-        controller_memory_log_probs = list()
-        controller_memory_states = list()
-        controller_memory_histories = list()
-        controller_memory_rewards = list()
+        train_data = self.init_train_data(state_continuous)
 
         cum_score = 0.
 
@@ -188,18 +276,7 @@ class IBPAgent():
             last_imagined_state = state
             gamma = args["gamma"]
 
-            manager_log_probs.clear()
-            manager_states.clear()
-            manager_histories.clear()
-            manager_rewards.clear()
-            imaginator_real_states.clear()
-            imaginator_imagined_states.clear()
-            imaginator_real_rewards.clear()
-            imaginator_imagined_rewards.clear()
-            controller_memory_log_probs.clear()
-            controller_memory_states.clear()
-            controller_memory_histories.clear()
-            controller_memory_rewards.clear()
+            self.clear_train_data(train_data, state_continuous)
 
             while not done:
                 t_last_real_state = torch.from_numpy(last_real_state)\
@@ -212,7 +289,7 @@ class IBPAgent():
                 )
 
                 if move == 0 or num_imagined_steps >= imagination_budget:
-                    action, t_action, t_action_log_prob = self.controller_step(
+                    action, t_action, t_action_log_prob = self.train_controller_step(
                         t_last_real_state, t_history
                     )
 
@@ -247,7 +324,7 @@ class IBPAgent():
                     controller_memory_histories.append(t_history.squeeze(0))
                     controller_memory_rewards.append(t_reward.squeeze(0))
                 elif move == 1:
-                    action, t_action, t_action_log_prob = self.controller_step(
+                    action, t_action, t_action_log_prob = self.train_controller_step(
                         t_last_real_state, t_history
                     )
 
@@ -275,7 +352,7 @@ class IBPAgent():
                     controller_memory_histories.append(t_history.squeeze(0))
                     controller_memory_rewards.append(t_imagined_reward.squeeze(0))
                 elif move == 2:
-                    action, t_action, t_action_log_prob = self.controller_step(
+                    action, t_action, t_action_log_prob = self.train_controller_step(
                         t_last_imagined_state, t_history
                     )
 
@@ -350,4 +427,55 @@ class IBPAgent():
             print(
                 f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real Steps={num_real_steps:4d} Imagined Steps={num_steps - num_real_steps:4d} "
                 f"M-Loss={manager_loss.item():4.4f} I-Loss={imaginator_loss.item():4.4f} CM-Loss={controller_memory_loss.item():4.4f} "
+                f"Mean Score={cum_score / episode:4.4f} Score={score:4.4f} {'<==' if score > 0. else '   '}")
+    
+    def evaluate(self, args: Dict[str, Any]) -> None:
+        self.freeze()
+        self.eval_mode()
+
+        num_episodes = args["max_num_episodes"]
+        state_continuous = args["state_continuous"]
+
+        cum_score = 0.
+
+        for episode in range(1, num_episodes + 1):
+            state, _ = self.eval_env.reset()
+            state = numpy.atleast_1d(state)
+            done = False
+            score = 0.
+            t_history = self.memory.reset()
+            num_steps = 0
+            last_real_state = state
+            last_imagined_state = state
+
+            while not done:
+                t_last_real_state = torch.from_numpy(last_real_state)\
+                    .to(dtype=torch.float32).unsqueeze(0)
+                t_last_imagined_state = torch.from_numpy(last_imagined_state)\
+                    .to(dtype=torch.float32).unsqueeze(0)
+
+                action, t_action = self.eval_controller_step(
+                    t_last_real_state, t_history
+                )
+
+                t_next_real_state, t_reward,\
+                next_real_state, done, score = self.eval_act_step(
+                    action, score
+                )
+
+                memory_data = [
+                    torch.tensor([[0]], dtype=torch.int64),
+                    t_last_real_state, t_last_imagined_state,
+                    t_action,
+                    t_next_real_state,
+                    t_reward
+                ]
+                last_real_state = next_real_state
+                last_imagined_state = next_real_state
+                t_history = self.memory.update(*memory_data)
+                num_steps += 1
+            cum_score += score
+
+            print(
+                f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} "
                 f"Mean Score={cum_score / episode:4.4f} Score={score:4.4f} {'<==' if score > 0. else '   '}")
