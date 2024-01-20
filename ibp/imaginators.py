@@ -94,20 +94,20 @@ class Imaginator_CState(torch.nn.Module):
             self,
             states: torch.Tensor,
             actions: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         states_actions = torch.cat([states, actions], dim=1)
         next_states_unbound = self.next_state_predictor(states_actions)
         next_states = torch.clamp(
             next_states_unbound, min=self.state_min, max=self.state_max
         )
         rewards = self.reward_predictor(states_actions)
-        return next_states, rewards
+        return next_states, None, rewards
     
     def step(
             self,
             states: torch.Tensor,
             actions: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         return self(states, actions)
     
     def loss_fn(

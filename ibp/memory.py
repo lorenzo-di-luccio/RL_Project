@@ -5,14 +5,14 @@ import torch.nn.functional
 class Memory(torch.nn.Module):
     def __init__(
             self,
-            num_routes: int,
+            route_dim: int,
             state_dim: int,
             action_dim: int,
             history_dim: int
     ) -> None:
         super(Memory, self).__init__()
 
-        data_dim = num_routes + state_dim + state_dim + action_dim + state_dim + 1
+        data_dim = route_dim + state_dim + state_dim + action_dim + state_dim + 1
         self.rec = torch.nn.LSTMCell(data_dim, history_dim)
         self.history_embeddings = torch.zeros((1, history_dim))
         self.cell_state = torch.zeros((1, history_dim))
@@ -35,7 +35,7 @@ class Memory(torch.nn.Module):
         )
         return self.history_embeddings
 
-    def reset(self) -> None:
+    def reset(self) -> torch.Tensor:
         self.history_embeddings = torch.zeros_like(self.history_embeddings)
         self.cell_state = torch.zeros_like(self.cell_state)
         return self.history_embeddings
