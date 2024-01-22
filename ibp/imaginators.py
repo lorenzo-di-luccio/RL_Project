@@ -36,7 +36,7 @@ class Imaginator_DState(torch.nn.Module):
         states_actions = torch.cat([states, actions], dim=1)
         next_states_logits = self.next_state_predictor(states_actions)
         next_states_probs = torch.softmax(next_states_logits, dim=-1)
-        next_states = torch.argmax(next_states_probs, dim=-1)
+        next_states = torch.argmax(next_states_probs, dim=-1, keepdim=True)
         rewards = self.reward_predictor(states_actions)
         return next_states, next_states_logits, rewards
     
