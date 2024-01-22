@@ -1,4 +1,3 @@
-import collections
 import gymnasium
 import numpy
 import numpy.random
@@ -45,21 +44,9 @@ if __name__ == "__main__":
     numpy.random.seed(RNG_SEED)
     torch.manual_seed(RNG_SEED)
     agent = IBPAgent__()
-    train_args = dict(
-        max_num_episodes=1_000,
-        imagination_budget=0,
-        gamma=0.99,
-        state_continuous=True,
-        log_file="log_train.csv"
-    )
     eval_args = dict(
         max_num_episodes=32,
         log_file="log_eval.csv"
     )
-    #agent.load()
-    agent.set_lr(agent.manager_optimizer, 1.e-3)
-    agent.set_lr(agent.imaginator_optimizer, 1.e-3)
-    agent.set_lr(agent.controller_memory_optimizer, 1.e-3)
-    #agent.train(train_args)
+    agent.load()
     agent.evaluate(eval_args)
-    #agent.save()

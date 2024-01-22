@@ -371,6 +371,10 @@ class IBPAgent():
                 train_data["controller_memory_rewards"], dim=0
             )
         }
+        if not state_continuous:
+            batched_train_data["t_imaginator_real_states"] = \
+                batched_train_data["t_imaginator_real_states"].view(-1)\
+                .to(dtype=torch.int64)
         return batched_train_data
     
     def train(self, args: Dict[str, Any]) -> None:
