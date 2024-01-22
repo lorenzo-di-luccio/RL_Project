@@ -1,4 +1,3 @@
-import collections
 import gymnasium
 import itertools
 import numpy
@@ -380,6 +379,8 @@ class IBPAgent():
 
         num_episodes = args["max_num_episodes"]
         state_continuous = args["state_continuous"]
+        log_file = open(args["log_file"], mode="w", encoding="utf-8")
+        log_file.write("Episode,Score,AvgScore\n")
         suffix = "" if state_continuous else "_logits"
 
         train_data = self.init_train_data(state_continuous)
@@ -549,17 +550,20 @@ class IBPAgent():
             self.controller_memory_optimizer.step()
 
             print(
-                f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real Steps={num_real_steps:4d} Imagined Steps={num_steps - num_real_steps:4d} "
+                f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real|Imagined Steps={num_real_steps:4d}|{num_steps - num_real_steps:4d} "
                 f"M-Loss={manager_loss.item():4.4f} I-Loss={imaginator_loss.item():4.4f} CM-Loss={controller_memory_loss.item():4.4f} "
                 f"Mean Score={cum_score / episode:4.4f} Score={score:4.4f} {'<==' if score > 0. else '   '}")
+            log_file.write(f"{episode},{score:4.4f},{cum_score / episode:4.4f}\n")
         self.train_env.close()
+        log_file.close()
     
     def evaluate(self, args: Dict[str, Any]) -> None:
         self.freeze()
         self.eval_mode()
 
         num_episodes = args["max_num_episodes"]
-        #state_continuous = args["state_continuous"]
+        log_file = open(args["log_file"], mode="w", encoding="utf-8")
+        log_file.write("Episode,Score,AvgScore\n")
 
         cum_score = 0.
 
@@ -604,4 +608,6 @@ class IBPAgent():
             print(
                 f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} "
                 f"Mean Score={cum_score / episode:4.4f} Score={score:4.4f} {'<==' if score > 0. else '   '}")
+            log_file.write(f"{episode},{score:4.4f},{cum_score / episode:4.4f}\n")
         self.eval_env.close()
+        log_file.close()
