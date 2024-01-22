@@ -39,7 +39,10 @@ class IBPAgent():
             lr=1.e-3
         )
     
-    def save(self) -> None:
+    def save(
+            self,
+            filename: str
+    ) -> None:
         ckpt = dict(
             manager=self.manager.state_dict(),
             controller=self.controller.state_dict(),
@@ -49,10 +52,13 @@ class IBPAgent():
             imaginator_optimizer=self.imaginator_optimizer.state_dict(),
             controller_memory_optimizer=self.controller_memory_optimizer.state_dict()
         )
-        torch.save(ckpt, "IBP.pt")
+        torch.save(ckpt, filename)
     
-    def load(self) -> None:
-        ckpt = torch.load("IBP.pt")
+    def load(
+            self,
+            filename: str
+    ) -> None:
+        ckpt = torch.load(filename)
         self.manager.load_state_dict(ckpt["manager"])
         self.controller.load_state_dict(ckpt["controller"])
         self.imaginator.load_state_dict(ckpt["imaginator"])

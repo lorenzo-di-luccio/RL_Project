@@ -21,6 +21,6 @@ def plot_graph(
         title=title,
         x="Episode",
         y=stat,
-        markers=True
+        markers=False
     )
     return fig

@@ -8,13 +8,14 @@ import ibp
 
 class IBPAgent__(ibp.IBPAgent):
     def __init__(self) -> None:
-        train_env = gymnasium.make("LunarLander-v2", render_mode="rgb_array")
-        eval_env = gymnasium.make("LunarLander-v2", render_mode="human")
-        state_dim = 8
+        train_env = gymnasium.make("CartPole-v1", render_mode="rgb_array")
+        eval_env = gymnasium.make("CartPole-v1", render_mode="human")
+        state_dim = 4
+        num_states = 1
         action_dim = 1
-        num_actions = 4
-        history_dim = 12
-        hidden_dim = 120
+        num_actions = 2
+        history_dim = 32
+        hidden_dim = 48
         route_dim = 1
         num_routes = 3
         manager = ibp.Manager(
@@ -25,8 +26,8 @@ class IBPAgent__(ibp.IBPAgent):
         )
         imaginator = ibp.Imaginator_CState(
             state_dim,
-            [-1.5, -1.5, -5., -5., -3.1415927, -5., -0., -0.],
-            [1.5, 1.5, 5., 5., 3.1415927, 5., 1., 1.],
+            [-4.8000002e+00, -3.4028235e+38, -4.1887903e-01, -3.4028235e+38],
+            [4.8000002e+00, 3.4028235e+38, 4.1887903e-01, 3.4028235e+38],
             action_dim, hidden_dim
         )
         memory = ibp.Memory(
@@ -49,11 +50,11 @@ if __name__ == "__main__":
         imagination_budget=0,
         gamma=0.99,
         state_continuous=True,
-        log_file="log_train.csv"
+        log_file="tmp/CartPole_imag0_ep1000_2000_log_train.csv"
     )
-    #agent.load()
+    agent.load("tmp/CartPole_imag0_IBP.pt")
     agent.set_lr(agent.manager_optimizer, 1.e-3)
     agent.set_lr(agent.imaginator_optimizer, 1.e-3)
     agent.set_lr(agent.controller_memory_optimizer, 1.e-3)
     agent.train(train_args)
-    agent.save()
+    agent.save("tmp/CartPole_imag0_IBP.pt")
