@@ -14,7 +14,7 @@ class IBPAgent__(ibp.IBPAgent):
         num_states = 1
         action_dim = 1
         num_actions = 2
-        history_dim = 32
+        history_dim = 12
         hidden_dim = 48
         route_dim = 1
         num_routes = 3
@@ -50,11 +50,9 @@ if __name__ == "__main__":
         imagination_budget=0,
         gamma=0.99,
         state_continuous=True,
-        log_file="tmp/CartPole_imag0_ep1000_2000_log_train.csv"
+        log_file="tmp/CartPole_imag1_ep1_1000_log_train.csv"
     )
-    agent.load("tmp/CartPole_imag0_IBP.pt")
-    agent.set_lr(agent.manager_optimizer, 1.e-3)
-    agent.set_lr(agent.imaginator_optimizer, 1.e-3)
-    agent.set_lr(agent.controller_memory_optimizer, 1.e-3)
+    #agent.load("tmp/CartPole_imag0_IBP.pt")
+    agent.set_lr(agent.optimizer, 1.e-3)
     agent.train(train_args)
-    agent.save("tmp/CartPole_imag0_IBP.pt")
+    #agent.save("tmp/CartPole_imag0_IBP.pt")

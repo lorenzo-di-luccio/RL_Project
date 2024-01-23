@@ -49,5 +49,5 @@ if __name__ == "__main__":
         max_num_episodes=16,
         log_file="tmp/CartPole_imag0_log_eval.csv"
     )
-    agent.load("tmp/CartPole_imag0_IBP.pt")
+    #agent.load("tmp/CartPole_imag0_IBP.pt")
     agent.evaluate(eval_args)
