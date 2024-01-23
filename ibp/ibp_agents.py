@@ -28,13 +28,15 @@ class IBPAgent():
         self.imaginator = imaginator
         self.memory = memory
 
-        self.optimizer = torch.optim.Adam(
-            itertools.chain(
-                self.manager.parameters(),
-                self.imaginator.parameters(),
-                self.controller.parameters(),
-                self.memory.parameters()
-            ), lr=1.e-3
+        self.manager_optimizer = torch.optim.Adam(
+            self.manager.parameters(), lr=1.e-3
+        )
+        self.imaginator_optimizer = torch.optim.Adam(
+            self.imaginator.parameters(), lr=1.e-3
+        )
+        self.controller_memory_optimizer = torch.optim.Adam(
+            itertools.chain(self.controller.parameters(), self.memory.parameters()),
+            lr=1.e-3
         )
     
     def save(
@@ -46,7 +48,9 @@ class IBPAgent():
             controller=self.controller.state_dict(),
             imaginator=self.imaginator.state_dict(),
             memory=self.memory.state_dict(),
-            optimizer=self.optimizer.state_dict()
+            manager_optimizer=self.manager_optimizer.state_dict(),
+            imaginator_optimizer=self.imaginator_optimizer.state_dict(),
+            controller_memory_optimizer=self.controller_memory_optimizer.state_dict()
         )
         torch.save(ckpt, filename)
     
@@ -59,7 +63,9 @@ class IBPAgent():
         self.controller.load_state_dict(ckpt["controller"])
         self.imaginator.load_state_dict(ckpt["imaginator"])
         self.memory.load_state_dict(ckpt["memory"])
-        self.optimizer.load_state_dict(ckpt["optimizer"])
+        self.manager_optimizer.load_state_dict(ckpt["manager_optimizer"])
+        self.imaginator_optimizer.load_state_dict(ckpt["imaginator_optimizer"])
+        self.controller_memory_optimizer.load_state_dict(ckpt["controller_memory_optimizer"])
 
     def train_mode(self) -> None:
         self.manager.train()
@@ -462,26 +468,26 @@ class IBPAgent():
                         t_last_real_state, t_history
                     )
 
-                    t_next_imagined_state, t_imagined_reward = self.imagination_step(
-                        t_action, t_last_real_state
-                    )
+                    with torch.no_grad():
+                        t_next_imagined_state, t_imagined_reward = self.imagination_step(
+                            t_action, t_last_real_state
+                        )
                     
                     num_imagined_steps += 1
                     memory_data = [
                         t_route,
                         t_last_real_state, t_last_imagined_state,
                         t_action,
-                        t_next_imagined_state.detach(),
-                        t_imagined_reward.detach()
+                        t_next_imagined_state,
+                        t_imagined_reward
                     ]
-                    last_imagined_state = t_next_imagined_state.detach()\
-                        .squeeze(0).numpy()
+                    last_imagined_state = t_next_imagined_state.squeeze(0).numpy()
 
                     new_train_data = {
                         "t_route_log_prob": t_route_log_prob,
                         "t_last_real_state": t_last_real_state.squeeze(0),
                         "t_history_detached": t_history.detach().squeeze(0),
-                        "t_imagined_reward": t_imagined_reward.detach().squeeze(0),
+                        "t_imagined_reward": t_imagined_reward.squeeze(0),
                         "t_action_log_prob": t_action_log_prob,
                         "t_history": t_history.squeeze(0)
                     }
@@ -491,26 +497,26 @@ class IBPAgent():
                         t_last_imagined_state, t_history
                     )
 
-                    t_next_imagined_state, t_imagined_reward = self.imagination_step(
-                        t_action, t_last_real_state
-                    )
+                    with torch.no_grad():
+                        t_next_imagined_state, t_imagined_reward = self.imagination_step(
+                            t_action, t_last_real_state
+                        )
                     
                     num_imagined_steps += 1
                     memory_data = [
                         t_route,
                         t_last_real_state, t_last_imagined_state,
                         t_action,
-                        t_next_imagined_state.detach(),
-                        t_imagined_reward.detach()
+                        t_next_imagined_state,
+                        t_imagined_reward
                     ]
-                    last_imagined_state = t_next_imagined_state.detach()\
-                        .squeeze(0).numpy()
+                    last_imagined_state = t_next_imagined_state.squeeze(0).numpy()
 
                     new_train_data = {
                         "t_route_log_prob": t_route_log_prob,
                         "t_last_imagined_state": t_last_imagined_state.squeeze(0),
                         "t_history_detached": t_history.detach().squeeze(0),
-                        "t_imagined_reward": t_imagined_reward.detach().squeeze(0),
+                        "t_imagined_reward": t_imagined_reward.squeeze(0),
                         "t_action_log_prob": t_action_log_prob,
                         "t_history": t_history.squeeze(0)
                     }
@@ -521,7 +527,7 @@ class IBPAgent():
 
             batched_train_data = self.batch_train_data(train_data, state_continuous)
 
-            self.optimizer.zero_grad()
+            self.manager_optimizer.zero_grad()
             manager_loss = self.manager.loss_fn(
                 gamma,
                 batched_train_data["t_manager_log_probs"],
@@ -529,12 +535,20 @@ class IBPAgent():
                 batched_train_data["t_manager_histories"],
                 batched_train_data["t_manager_rewards"]
             )
+            manager_loss.backward()
+            self.manager_optimizer.step()
+
+            self.imaginator_optimizer.zero_grad()
             imaginator_loss = self.imaginator.loss_fn(
                 batched_train_data[f"t_imaginator_imagined_states{suffix}"],
                 batched_train_data["t_imaginator_real_states"],
                 batched_train_data["t_imaginator_imagined_rewards"],
                 batched_train_data["t_imaginator_real_rewards"]
             )
+            imaginator_loss.backward()
+            self.imaginator_optimizer.step()
+
+            self.controller_memory_optimizer.zero_grad()
             controller_memory_loss = self.controller.loss_fn(
                 gamma,
                 batched_train_data["t_controller_memory_log_probs"],
@@ -542,9 +556,8 @@ class IBPAgent():
                 batched_train_data["t_controller_memory_histories"],
                 batched_train_data["t_controller_memory_rewards"]
             )
-            loss = manager_loss + imaginator_loss + controller_memory_loss
-            loss.backward()
-            self.optimizer.step()
+            controller_memory_loss.backward()
+            self.controller_memory_optimizer.step()
 
             print(
                 f"Episode {episode:4d}/{num_episodes:4d} Steps={num_steps:4d} Real|Imagined Steps={num_real_steps:4d}|{num_steps - num_real_steps:4d} "
@@ -618,7 +631,7 @@ class IBPAgent_CartPole(IBPAgent):
         action_dim = 1
         num_actions = 2
         history_dim = 32
-        hidden_dim = 48
+        hidden_dim = 128
         route_dim = 1
         num_routes = 3
         manager = Manager(

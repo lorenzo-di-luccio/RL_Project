@@ -44,10 +44,10 @@ if __name__ == "__main__":
     random.seed(RNG_SEED)
     numpy.random.seed(RNG_SEED)
     torch.manual_seed(RNG_SEED)
-    agent = IBPAgent__()
+    agent = ibp.IBPAgent_CartPole()
     eval_args = dict(
         max_num_episodes=16,
         log_file="tmp/CartPole_imag0_log_eval.csv"
     )
-    #agent.load("tmp/CartPole_imag0_IBP.pt")
+    agent.load("tmp/CartPole_imag4_IBP.pt")
     agent.evaluate(eval_args)
