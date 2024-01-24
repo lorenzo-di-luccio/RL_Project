@@ -551,7 +551,7 @@ class IBPAgent():
                 batched_train_data["t_manager_states"],
                 batched_train_data["t_manager_histories"],
                 batched_train_data["t_manager_rewards"]
-            ) * (0. if imagination_budget == 0 else 1.)
+            )
             manager_loss.backward()
             self.manager_optimizer.step()
 
