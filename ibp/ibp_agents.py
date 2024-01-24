@@ -67,6 +67,14 @@ class IBPAgent():
         self.imaginator_optimizer.load_state_dict(ckpt["imaginator_optimizer"])
         self.controller_memory_optimizer.load_state_dict(ckpt["controller_memory_optimizer"])
 
+    def load_imaginator(
+            self,
+            filename: str
+    ) -> None:
+        ckpt = torch.load(filename)
+        self.imaginator.load_state_dict(ckpt["imaginator"])
+        self.imaginator_optimizer.load_state_dict(ckpt["imaginator_optimizer"])
+    
     def train_mode(self) -> None:
         self.manager.train()
         self.controller.train()
@@ -499,7 +507,7 @@ class IBPAgent():
 
                     with torch.no_grad():
                         t_next_imagined_state, t_imagined_reward = self.imagination_step(
-                            t_action, t_last_real_state
+                            t_action, t_last_imagined_state
                         )
                     
                     num_imagined_steps += 1
@@ -534,7 +542,7 @@ class IBPAgent():
                 batched_train_data["t_manager_states"],
                 batched_train_data["t_manager_histories"],
                 batched_train_data["t_manager_rewards"]
-            )
+            ) * (0. if imagination_budget == 0 else 1.)
             manager_loss.backward()
             self.manager_optimizer.step()
 
@@ -630,8 +638,8 @@ class IBPAgent_CartPole(IBPAgent):
         num_states = 1
         action_dim = 1
         num_actions = 2
-        history_dim = 32
-        hidden_dim = 128
+        history_dim = 12
+        hidden_dim = 64
         route_dim = 1
         num_routes = 3
         manager = Manager(
