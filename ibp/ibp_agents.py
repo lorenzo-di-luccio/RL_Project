@@ -75,6 +75,15 @@ class IBPAgent():
         self.imaginator.load_state_dict(ckpt["imaginator"])
         self.imaginator_optimizer.load_state_dict(ckpt["imaginator_optimizer"])
     
+    def load_controller_memory(
+            self,
+            filename: str
+    ) -> None:
+        ckpt = torch.load(filename)
+        self.controller.load_state_dict(ckpt["controller"])
+        self.memory.load_state_dict(ckpt["memory"])
+        self.controller_memory_optimizer.load_state_dict(ckpt["controller_memory_optimizer"])
+    
     def train_mode(self) -> None:
         self.manager.train()
         self.controller.train()
