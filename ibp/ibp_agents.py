@@ -671,3 +671,70 @@ class IBPAgent_CartPole(IBPAgent):
             train_env, eval_env,
             manager, controller, imaginator, memory
         )
+
+class IBPAgent_FrozenLake(IBPAgent):
+    def __init__(self) -> None:
+        train_env = gymnasium.make(
+            "FrozenLake-v1", is_slippery=False, render_mode="rgb_array"
+        )
+        eval_env = gymnasium.make(
+            "FrozenLake-v1", is_slippery=False, render_mode="human"
+        )
+        state_dim = 1
+        num_states = 16
+        action_dim = 1
+        num_actions = 4
+        history_dim = 24
+        hidden_dim = 32
+        route_dim = 1
+        num_routes = 3
+        manager = Manager(
+            state_dim, history_dim, hidden_dim, num_routes
+        )
+        controller = Controller_DAction(
+            state_dim, history_dim, num_actions, hidden_dim
+        )
+        imaginator = Imaginator_DState(
+            state_dim, num_states, action_dim, hidden_dim
+        )
+        memory = Memory(
+            route_dim, state_dim, action_dim, history_dim
+        )
+
+        super(IBPAgent_FrozenLake, self).__init__(
+            train_env, eval_env,
+            manager, controller, imaginator, memory
+        )
+
+class IBPAgent_LunarLander(IBPAgent):
+    def __init__(self) -> None:
+        train_env = gymnasium.make("LunarLander-v2", render_mode="rgb_array")
+        eval_env = gymnasium.make("LunarLander-v2", render_mode="human")
+        state_dim = 8
+        num_states = 1
+        action_dim = 1
+        num_actions = 4
+        history_dim = 16
+        hidden_dim = 56
+        route_dim = 1
+        num_routes = 3
+        manager = Manager(
+            state_dim, history_dim, hidden_dim, num_routes
+        )
+        controller = Controller_DAction(
+            state_dim, history_dim, num_actions, hidden_dim
+        )
+        imaginator = Imaginator_CState(
+            state_dim,
+            [-1.5, -1.5, -5., -5., -3.1415927, -5., -0., -0.],
+            [1.5, 1.5, 5., 5., 3.1415927, 5., 1., 1.],
+            action_dim, hidden_dim
+        )
+        memory = Memory(
+            route_dim, state_dim, action_dim, history_dim
+        )
+
+        super(IBPAgent_LunarLander, self).__init__(
+            train_env, eval_env,
+            manager, controller, imaginator, memory
+        )
